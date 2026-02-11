@@ -1,27 +1,52 @@
 # Archimedes: Siege of Syracuse
 
-A browser-based 3D mini-game built with **HTML5 + Three.js** where you defend Syracuse during the Punic Wars.
+A browser-based 3D game built with **HTML5 + Three.js** where you defend Syracuse from the Roman fleet during the Punic Wars.
 
-## Features
+## What’s in this version
 
-- Play as Archimedes atop the city walls.
-- Use **solar death rays** (left mouse button) to ignite Roman ships.
-- Use the legendary **Claw of Archimedes** (space bar) to grab and fling nearby ships.
-- Survive until you reach victory score, or lose if city integrity drops to zero.
+- Play as Archimedes atop Syracuse's walls.
+- Fire **solar death rays** to burn Roman ships.
+- Use the **Claw of Archimedes** to snatch and fling ships.
+- Fight upgraded, more detailed Roman warships (ram, mast, sail, oars, crest, wakes).
+- Optional **arm-control mode** using your webcam + pose tracking.
 
-## Run locally
+## How to run it
 
-Because this project uses ES modules from a CDN, run it from a local web server:
+> You must run from a local server (not `file://`) because modules and webcam APIs need it.
+
+### Option A (Python)
 
 ```bash
 python3 -m http.server 4173
 ```
 
-Then open <http://localhost:4173>.
+Open:
+
+- <http://localhost:4173>
+
+### Option B (Node)
+
+```bash
+npx serve -l 4173 .
+```
+
+Open:
+
+- <http://localhost:4173>
 
 ## Controls
 
 - `A` / `D`: Move Archimedes along the wall.
-- Mouse: Aim.
-- Hold left mouse button: Fire solar ray.
-- `Space`: Trigger giant claw (has cooldown).
+- Mouse: Aim death ray.
+- Hold left mouse: Fire death ray.
+- `Space`: Trigger giant claw.
+- `M` or the HUD button: Toggle webcam arm-control mode.
+
+## Arm-control mode (webcam)
+
+When arm mode is enabled:
+
+- Raise both arms above shoulder level to fire the death ray.
+- Spread arms wide to trigger the claw (when off cooldown).
+- Browser will ask for camera permission.
+- If webcam fails, switch back to mouse mode with `M`.

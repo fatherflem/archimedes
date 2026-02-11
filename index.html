@@ -13,14 +13,29 @@
         Move: <strong>A / D</strong> • Aim: <strong>Mouse</strong> • Solar Death Ray:
         <strong>Hold Left Click</strong> • Giant Claw: <strong>Space</strong>
       </p>
+      <p>
+        Control Mode: <strong id="modeLabel">Mouse</strong> • Press <strong>M</strong> or use
+        <button id="modeToggle" type="button">Enable Arm Control</button>
+      </p>
       <p id="stats"></p>
+      <p id="webcamStatus"></p>
     </div>
+
+    <div id="webcamPanel" aria-hidden="true">
+      <video id="webcam" autoplay playsinline muted></video>
+      <canvas id="poseOverlay"></canvas>
+    </div>
+
     <div id="overlay">
       <div id="message"></div>
       <button id="restart">Defend Syracuse Again</button>
     </div>
+
     <canvas id="game"></canvas>
 
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose/pose.js"></script>
     <script type="module" src="game.js"></script>
   </body>
 </html>

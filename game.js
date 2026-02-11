@@ -5,6 +5,13 @@ const stats = document.querySelector("#stats");
 const overlay = document.querySelector("#overlay");
 const message = document.querySelector("#message");
 const restartBtn = document.querySelector("#restart");
+const modeToggle = document.querySelector("#modeToggle");
+const modeLabel = document.querySelector("#modeLabel");
+const webcamStatus = document.querySelector("#webcamStatus");
+const webcamPanel = document.querySelector("#webcamPanel");
+const webcamVideo = document.querySelector("#webcam");
+const poseOverlay = document.querySelector("#poseOverlay");
+const poseCtx = poseOverlay.getContext("2d");
 
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
@@ -22,11 +29,11 @@ const sun = new THREE.DirectionalLight("#fff5b1", 2.2);
 sun.position.set(36, 50, 20);
 sun.castShadow = true;
 scene.add(sun);
-scene.add(new THREE.AmbientLight("#8bbce6", 0.6));
+scene.add(new THREE.AmbientLight("#8bbce6", 0.65));
 
 const water = new THREE.Mesh(
   new THREE.PlaneGeometry(600, 600, 100, 100),
-  new THREE.MeshStandardMaterial({ color: "#2f68a0", roughness: 0.35, metalness: 0.12 })
+  new THREE.MeshStandardMaterial({ color: "#2f68a0", roughness: 0.33, metalness: 0.15 })
 );
 water.rotation.x = -Math.PI / 2;
 water.position.y = -1.3;
@@ -63,6 +70,7 @@ mirrorRig.add(mirror);
 const clawBase = new THREE.Group();
 clawBase.position.set(-14, 8, 1);
 scene.add(clawBase);
+
 const arm = new THREE.Mesh(
   new THREE.BoxGeometry(0.7, 0.7, 6),
   new THREE.MeshStandardMaterial({ color: "#6c4e34" })
@@ -97,49 +105,122 @@ let gameOver = false;
 let firePressed = false;
 let clawCooldown = 0;
 let spawnTimer = 0;
-let nextSpawn = 1.6;
+let nextSpawn = 1.4;
+let controlMode = "mouse";
+
+let poseController = null;
+let cameraFeed = null;
+const armState = {
+  aimX: 0,
+  fire: false,
+  clawArmed: false,
+};
 
 const enemyFleet = [];
 const sparks = [];
 
-function makeEnemy() {
+function makeRomanShip() {
+  const ship = new THREE.Group();
+
+  const hullColor = new THREE.Color().setHSL(THREE.MathUtils.randFloat(0.02, 0.08), 0.65, THREE.MathUtils.randFloat(0.2, 0.35));
+  const stripeColor = new THREE.Color().setHSL(THREE.MathUtils.randFloat(0.02, 0.12), 0.75, THREE.MathUtils.randFloat(0.45, 0.58));
+
   const hull = new THREE.Mesh(
-    new THREE.BoxGeometry(2.3, 1.2, 7),
-    new THREE.MeshStandardMaterial({ color: "#6a2f1e", roughness: 0.8 })
+    new THREE.BoxGeometry(2.5, 1.1, 8.2),
+    new THREE.MeshStandardMaterial({ color: hullColor, roughness: 0.74, metalness: 0.1 })
   );
   hull.castShadow = true;
   hull.receiveShadow = true;
+  ship.add(hull);
+
+  const bow = new THREE.Mesh(
+    new THREE.ConeGeometry(1.25, 2.5, 8),
+    new THREE.MeshStandardMaterial({ color: hullColor, roughness: 0.72 })
+  );
+  bow.rotation.x = Math.PI / 2;
+  bow.position.z = 5.2;
+  bow.position.y = -0.05;
+  ship.add(bow);
+
+  const ram = new THREE.Mesh(
+    new THREE.ConeGeometry(0.25, 1.4, 10),
+    new THREE.MeshStandardMaterial({ color: "#b1bccf", metalness: 0.9, roughness: 0.2 })
+  );
+  ram.rotation.x = Math.PI / 2;
+  ram.position.set(0, -0.1, 6.3);
+  ship.add(ram);
+
+  const trim = new THREE.Mesh(
+    new THREE.BoxGeometry(2.55, 0.15, 8.4),
+    new THREE.MeshStandardMaterial({ color: stripeColor, roughness: 0.8 })
+  );
+  trim.position.y = 0.62;
+  ship.add(trim);
+
+  for (let i = -1; i <= 1; i += 2) {
+    for (let j = -3; j <= 3; j += 1) {
+      const oar = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.03, 0.03, 1.5, 6),
+        new THREE.MeshStandardMaterial({ color: "#a77547", roughness: 0.9 })
+      );
+      oar.rotation.z = Math.PI / 2;
+      oar.rotation.y = i > 0 ? 0.35 : -0.35;
+      oar.position.set(i * 1.35, 0.3, j * 1.15);
+      ship.add(oar);
+    }
+  }
+
+  const mast = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.12, 0.15, 3.8, 10),
+    new THREE.MeshStandardMaterial({ color: "#725235", roughness: 0.9 })
+  );
+  mast.position.y = 2.1;
+  ship.add(mast);
 
   const sail = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.2, 2.4),
-    new THREE.MeshStandardMaterial({ color: "#ece8d8", side: THREE.DoubleSide, roughness: 0.9 })
+    new THREE.PlaneGeometry(2.5, 2.3),
+    new THREE.MeshStandardMaterial({ color: "#eae2cd", side: THREE.DoubleSide, roughness: 0.95 })
   );
-  sail.position.set(0, 2.2, 0);
-  hull.add(sail);
+  sail.position.set(0, 2.4, 0);
+  ship.add(sail);
 
-  hull.position.set(THREE.MathUtils.randFloatSpread(68), -0.3, THREE.MathUtils.randFloat(66, 130));
-  scene.add(hull);
+  const crest = new THREE.Mesh(
+    new THREE.PlaneGeometry(1.1, 0.9),
+    new THREE.MeshStandardMaterial({ color: "#a2261f", side: THREE.DoubleSide, roughness: 0.8 })
+  );
+  crest.position.set(0, 3.4, 0);
+  crest.rotation.y = Math.PI / 2;
+  ship.add(crest);
 
-  enemyFleet.push({ mesh: hull, hp: 100, speed: THREE.MathUtils.randFloat(4, 6.6), burning: 0 });
+  ship.position.set(THREE.MathUtils.randFloatSpread(68), -0.3, THREE.MathUtils.randFloat(66, 130));
+  scene.add(ship);
+
+  enemyFleet.push({
+    mesh: ship,
+    hull,
+    sail,
+    hp: 130,
+    speed: THREE.MathUtils.randFloat(3.8, 6.1),
+    burning: 0,
+    wakeTick: Math.random(),
+  });
 }
 
-function spawnSpark(position, tint = "#ffd36a") {
+function spawnSpark(position, tint = "#ffd36a", scale = 1) {
   const sprite = new THREE.Mesh(
-    new THREE.SphereGeometry(0.12, 6, 6),
+    new THREE.SphereGeometry(0.12 * scale, 6, 6),
     new THREE.MeshBasicMaterial({ color: tint, transparent: true })
   );
   sprite.position.copy(position);
   sprite.position.y += 1.4;
   scene.add(sprite);
-  sparks.push({ mesh: sprite, life: 0.8 + Math.random() * 0.5, vy: 1 + Math.random() * 1.2 });
+  sparks.push({ mesh: sprite, life: 0.8 + Math.random() * 0.45, vy: 1 + Math.random() * 1.3 });
 }
 
 function removeEnemy(enemy) {
   scene.remove(enemy.mesh);
   const idx = enemyFleet.indexOf(enemy);
-  if (idx >= 0) {
-    enemyFleet.splice(idx, 1);
-  }
+  if (idx >= 0) enemyFleet.splice(idx, 1);
 }
 
 function endGame(text) {
@@ -150,12 +231,8 @@ function endGame(text) {
 }
 
 function restartGame() {
-  for (const enemy of [...enemyFleet]) {
-    removeEnemy(enemy);
-  }
-  for (const spark of [...sparks]) {
-    scene.remove(spark.mesh);
-  }
+  for (const enemy of [...enemyFleet]) removeEnemy(enemy);
+  for (const spark of [...sparks]) scene.remove(spark.mesh);
   sparks.length = 0;
 
   cityIntegrity = 100;
@@ -164,7 +241,7 @@ function restartGame() {
   firePressed = false;
   clawCooldown = 0;
   spawnTimer = 0;
-  nextSpawn = 1.6;
+  nextSpawn = 1.4;
   mirrorRig.position.x = 0;
   overlay.classList.remove("visible");
 }
@@ -180,75 +257,176 @@ function applySolarRay(dt) {
   }
 
   raycaster.setFromCamera(pointer, camera);
-  const intersects = raycaster.intersectObjects(enemyFleet.map((e) => e.mesh), false);
+  const intersects = raycaster.intersectObjects(enemyFleet.map((e) => e.mesh), true);
   if (intersects.length === 0) {
     laserBeam.visible = false;
     return;
   }
 
   const hit = intersects[0];
-  const enemy = enemyFleet.find((e) => e.mesh === hit.object);
+  const enemy = enemyFleet.find((e) => e.mesh === hit.object || e.mesh.children.includes(hit.object));
   if (!enemy) {
     laserBeam.visible = false;
     return;
   }
 
-  const burn = 28 * dt;
-  enemy.hp -= burn;
-  enemy.burning = 0.5;
-
-  if (Math.random() < 0.65) {
-    spawnSpark(hit.point, "#ffca59");
-  }
+  enemy.hp -= 34 * dt;
+  enemy.burning = 0.55;
+  if (Math.random() < 0.68) spawnSpark(hit.point, "#ffca59", 1.1);
 
   const origin = mirror.getWorldPosition(new THREE.Vector3());
   const end = hit.point.clone();
   const direction = end.clone().sub(origin);
+  const unit = direction.clone().normalize();
   const length = direction.length();
   laserBeam.visible = true;
-  laserBeam.position.copy(origin).addScaledVector(direction.normalize(), length / 2);
+  laserBeam.position.copy(origin).addScaledVector(unit, length / 2);
   laserBeam.scale.set(1, length, 1);
-  laserBeam.quaternion.setFromUnitVectors(seaLine, direction.normalize());
+  laserBeam.quaternion.setFromUnitVectors(seaLine, unit);
 
   if (enemy.hp <= 0) {
-    score += 25;
-    for (let i = 0; i < 14; i += 1) {
-      spawnSpark(enemy.mesh.position, "#ff8e55");
-    }
+    score += 30;
+    for (let i = 0; i < 18; i += 1) spawnSpark(enemy.mesh.position, "#ff8e55", 1.4);
     removeEnemy(enemy);
   }
 }
 
 function triggerClaw() {
-  if (clawCooldown > 0 || gameOver) {
-    return;
-  }
+  if (clawCooldown > 0 || gameOver) return;
 
   let best = null;
-  let bestDistance = 13;
+  let bestDistance = 14;
+  const clawTip = claw.getWorldPosition(new THREE.Vector3());
   for (const enemy of enemyFleet) {
-    const dist = enemy.mesh.position.distanceTo(claw.getWorldPosition(new THREE.Vector3()));
+    const dist = enemy.mesh.position.distanceTo(clawTip);
     if (dist < bestDistance) {
       bestDistance = dist;
       best = enemy;
     }
   }
 
-  clawCooldown = 5;
-  if (!best) {
+  clawCooldown = 4.5;
+  if (!best) return;
+
+  best.mesh.position.z += 16;
+  best.mesh.position.y += 4.2;
+  best.hp -= 110;
+  for (let i = 0; i < 12; i += 1) spawnSpark(best.mesh.position, "#a8e8ff", 1.15);
+
+  if (best.hp <= 0) {
+    score += 22;
+    removeEnemy(best);
+  }
+}
+
+function updateArmControl() {
+  if (controlMode !== "arm") return;
+  pointer.x += (armState.aimX - pointer.x) * 0.2;
+  firePressed = armState.fire;
+  if (armState.clawArmed) {
+    triggerClaw();
+    armState.clawArmed = false;
+  }
+}
+
+async function toggleControlMode() {
+  if (controlMode === "mouse") {
+    await enableArmControl();
+    return;
+  }
+  disableArmControl("Mouse mode active.");
+}
+
+function disableArmControl(status = "Arm control disabled.") {
+  controlMode = "mouse";
+  modeLabel.textContent = "Mouse";
+  modeToggle.textContent = "Enable Arm Control";
+  webcamStatus.textContent = status;
+  webcamPanel.style.display = "none";
+  firePressed = false;
+
+  if (cameraFeed) {
+    cameraFeed.stop();
+    cameraFeed = null;
+  }
+
+  const stream = webcamVideo.srcObject;
+  if (stream) {
+    stream.getTracks().forEach((t) => t.stop());
+    webcamVideo.srcObject = null;
+  }
+}
+
+async function enableArmControl() {
+  if (!window.Pose || !window.Camera) {
+    webcamStatus.textContent = "Pose library unavailable in this browser.";
     return;
   }
 
-  best.mesh.position.z += 14;
-  best.mesh.position.y += 4;
-  best.hp -= 90;
-  for (let i = 0; i < 9; i += 1) {
-    spawnSpark(best.mesh.position, "#a8e8ff");
-  }
+  try {
+    controlMode = "arm";
+    modeLabel.textContent = "Arm / Webcam";
+    modeToggle.textContent = "Disable Arm Control";
+    webcamStatus.textContent = "Starting webcam tracking...";
+    webcamPanel.style.display = "block";
 
-  if (best.hp <= 0) {
-    score += 18;
-    removeEnemy(best);
+    poseOverlay.width = webcamPanel.clientWidth;
+    poseOverlay.height = webcamPanel.clientHeight;
+
+    if (!poseController) {
+      poseController = new window.Pose({
+        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`,
+      });
+
+      poseController.setOptions({
+        modelComplexity: 1,
+        smoothLandmarks: true,
+        minDetectionConfidence: 0.5,
+        minTrackingConfidence: 0.5,
+      });
+
+      poseController.onResults((results) => {
+        poseCtx.save();
+        poseCtx.clearRect(0, 0, poseOverlay.width, poseOverlay.height);
+        if (results.poseLandmarks && window.drawConnectors && window.drawLandmarks && window.POSE_CONNECTIONS) {
+          window.drawConnectors(poseCtx, results.poseLandmarks, window.POSE_CONNECTIONS, { color: "#53d6ff", lineWidth: 2 });
+          window.drawLandmarks(poseCtx, results.poseLandmarks, { color: "#ffe175", lineWidth: 1, radius: 3 });
+
+          const leftShoulder = results.poseLandmarks[11];
+          const rightShoulder = results.poseLandmarks[12];
+          const leftWrist = results.poseLandmarks[15];
+          const rightWrist = results.poseLandmarks[16];
+
+          if (leftWrist && rightWrist && leftShoulder && rightShoulder) {
+            const armCenter = (leftWrist.x + rightWrist.x) / 2;
+            armState.aimX = THREE.MathUtils.clamp((0.5 - armCenter) * 2.2, -1, 1);
+
+            const averageWristY = (leftWrist.y + rightWrist.y) / 2;
+            const averageShoulderY = (leftShoulder.y + rightShoulder.y) / 2;
+            armState.fire = averageWristY < averageShoulderY - 0.05;
+
+            const handsWide = Math.abs(leftWrist.x - rightWrist.x) > 0.46;
+            if (handsWide && clawCooldown <= 0.1) {
+              armState.clawArmed = true;
+            }
+          }
+          webcamStatus.textContent = "Arm tracking active: raise both arms to fire. Spread arms wide to trigger claw.";
+        }
+        poseCtx.restore();
+      });
+    }
+
+    cameraFeed = new window.Camera(webcamVideo, {
+      onFrame: async () => {
+        await poseController.send({ image: webcamVideo });
+      },
+      width: 640,
+      height: 360,
+    });
+
+    await cameraFeed.start();
+  } catch (error) {
+    disableArmControl(`Camera access failed: ${error.message}`);
   }
 }
 
@@ -257,11 +435,13 @@ function animate() {
   const elapsed = clock.elapsedTime;
 
   if (!gameOver) {
+    updateArmControl();
+
     spawnTimer += dt;
     if (spawnTimer > nextSpawn) {
       spawnTimer = 0;
-      nextSpawn = Math.max(0.45, 1.6 - score / 180);
-      makeEnemy();
+      nextSpawn = Math.max(0.42, 1.35 - score / 220);
+      makeRomanShip();
     }
 
     const move = (keys.has("KeyD") ? 1 : 0) - (keys.has("KeyA") ? 1 : 0);
@@ -275,22 +455,27 @@ function animate() {
 
     for (const enemy of [...enemyFleet]) {
       enemy.mesh.position.z -= enemy.speed * dt;
-      enemy.mesh.position.y = -0.3 + Math.sin(elapsed * 2 + enemy.mesh.position.x) * 0.15;
+      enemy.mesh.position.y = -0.32 + Math.sin(elapsed * 2 + enemy.mesh.position.x) * 0.15;
       enemy.mesh.rotation.y = Math.sin(elapsed + enemy.mesh.position.x) * 0.07;
+      enemy.sail.rotation.y = Math.sin(elapsed * 2 + enemy.mesh.position.x) * 0.08;
+
+      enemy.wakeTick += dt;
+      if (enemy.wakeTick > 0.08) {
+        enemy.wakeTick = 0;
+        spawnSpark(enemy.mesh.position.clone().add(new THREE.Vector3(0, -0.8, -4.1)), "#9cd8ff", 0.75);
+      }
 
       if (enemy.burning > 0) {
         enemy.burning -= dt;
-        enemy.mesh.material.emissive = new THREE.Color("#ff8d48");
-        enemy.mesh.material.emissiveIntensity = 0.48;
+        enemy.hull.material.emissive = new THREE.Color("#ff8d48");
+        enemy.hull.material.emissiveIntensity = 0.52;
       } else {
-        enemy.mesh.material.emissiveIntensity = 0;
+        enemy.hull.material.emissiveIntensity = 0;
       }
 
       if (enemy.mesh.position.z < 1.5) {
-        cityIntegrity -= 16;
-        for (let i = 0; i < 7; i += 1) {
-          spawnSpark(enemy.mesh.position, "#ff6961");
-        }
+        cityIntegrity -= 15;
+        for (let i = 0; i < 8; i += 1) spawnSpark(enemy.mesh.position, "#ff6961", 1.2);
         removeEnemy(enemy);
       }
     }
@@ -299,8 +484,8 @@ function animate() {
       endGame("The Romans breached Syracuse. Archimedes vows a smarter defense!");
     }
 
-    if (score >= 300) {
-      endGame("Victory! Syracuse stands—your mirrors and claws scattered the Roman fleet.");
+    if (score >= 340) {
+      endGame("Victory! Syracuse stands—your mirrors and claws shattered the Roman fleet.");
     }
   }
 
@@ -317,7 +502,7 @@ function animate() {
   }
 
   water.material.emissive = new THREE.Color("#0c2e55");
-  water.material.emissiveIntensity = 0.06 + Math.sin(elapsed * 2.2) * 0.03;
+  water.material.emissiveIntensity = 0.07 + Math.sin(elapsed * 2.2) * 0.03;
 
   camera.position.x += (mirrorRig.position.x * 0.35 - camera.position.x) * 3 * dt;
   camera.position.y = 16 + Math.sin(elapsed * 0.8) * 0.3;
@@ -335,33 +520,30 @@ window.addEventListener("resize", () => {
 });
 
 window.addEventListener("pointermove", (event) => {
+  if (controlMode === "arm") return;
   pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
   pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
 });
 
 window.addEventListener("pointerdown", (event) => {
-  if (event.button === 0) {
-    firePressed = true;
-  }
+  if (controlMode === "mouse" && event.button === 0) firePressed = true;
 });
 
 window.addEventListener("pointerup", (event) => {
-  if (event.button === 0) {
-    firePressed = false;
-  }
+  if (event.button === 0) firePressed = false;
 });
 
 window.addEventListener("keydown", (event) => {
   keys.add(event.code);
-  if (event.code === "Space") {
-    triggerClaw();
-  }
+  if (event.code === "Space") triggerClaw();
+  if (event.code === "KeyM") toggleControlMode();
 });
 
 window.addEventListener("keyup", (event) => {
   keys.delete(event.code);
 });
 
+modeToggle.addEventListener("click", toggleControlMode);
 restartBtn.addEventListener("click", restartGame);
 
 restartGame();
