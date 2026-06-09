@@ -1,0 +1,11 @@
+{
+  "note": "Seed reference for The Whispering Crash DM cockpit. Runtime sample data is created by SampleAdventureFactory so the MVP works even before ScriptableObject assets are manually generated.",
+  "scenes": [
+    "Crash Approach", "Castle Courtyard", "First Echo Contact", "Majel Reveal",
+    "Fire Elemental Chamber", "Water Elemental Chamber", "Earth Elemental Chamber", "Air Elemental Chamber", "Storm Elemental Chamber", "Necro Elemental Chamber",
+    "God Machine Entrance", "God Machine Phase 1", "God Machine Phase 2", "Final Choice"
+  ],
+  "soundCues": [
+    "Echo Whisper", "Xylos Pulse", "God Machine Drone", "Castle Groan", "Time Stutter", "Fire Surge", "Water Surge", "Stone Heartbeat", "Air Rush", "Storm Crack", "Dead Choir", "Psychic Snap"
+  ]
+}
